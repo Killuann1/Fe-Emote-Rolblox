@@ -287,7 +287,6 @@ local LocalPlayer = Players.LocalPlayer
 if IsStudio then
 	ScreenGui.Parent = LocalPlayer.PlayerGui
 else
-	--thanks inf yield
 	local SynV3 = syn and DrawingImmediate
 	if (not is_sirhurt_closure) and (not SynV3) and (syn and syn.protect_gui) then
 		syn.protect_gui(ScreenGui)
@@ -356,53 +355,87 @@ local function WaitForChildOfClass(parent, class)
 	return child
 end
 
-local Cursor = ""
-local maxAttempts = 10 -- Ограничение числа попыток для предотвращения бесконечного цикла
-local attemptCount = 0
-local success = false
-while true do
-	local function Request()
-		local success, Response = pcall(function()
-			return game:HttpGetAsync("https://catalog.roblox.com/v1/search/items/details?Category=12&Subcategory=39&SortType=1&SortAggregation=&limit=30&IncludeNotForSale=true&cursor=".. Cursor)
-		end)
-		if not success then
-			attemptCount = attemptCount + 1
-			if attemptCount >= maxAttempts then
-				return nil
-			end
-			task.wait(5)
-			return Request()
-		end
-		return Response
-	end
-	local Response = Request()
-	if not Response then
-		SendNotification("Error", "Failed to load emotes after multiple attempts. Try again later.")
-		break
-	end
-	local Body = HttpService:JSONDecode(Response)
-	for i,v in pairs(Body.data) do
-		AddEmote(v.name, v.id, v.price)
-	end
-	if Body.nextPageCursor ~= nil then
-		Cursor = Body.nextPageCursor
-	else
-		success = true
-		break
-	end
+local function CheckConnectivity()
+	local success, _ = pcall(function()
+		return game:HttpGetAsync("https://www.roblox.com")
+	end)
+	return success
 end
 
---unreleased emotes
-AddEmote("Arm Wave", 5915773155)
-AddEmote("Head Banging", 5915779725)
-AddEmote("Face Calisthenics", 9830731012)
+if not CheckConnectivity() then
+	Loading:Destroy()
+	SendNotification("Error", "No internet connection. Please check your network and try again.")
+else
+local Cursor = ""
+local maxAttempts = 5
+local attemptCount = 0
+local success = false
 
---finished loading
+-- Проверка сети
+local function CheckNetwork()
+    local success, response = pcall(function()
+        return game:HttpGetAsync("https://www.roblox.com")
+    end)
+    return success
+end
+
+if not CheckNetwork() then
+    SendNotification("Error", "No internet connection. Please check your network and try again.")
+    Loading:Destroy()
+    return
+end
+
+-- Загрузка эмоций
+while true do
+    local function Request()
+        local success, Response = pcall(function()
+            return game:HttpGetAsync("https://catalog.roblox.com/v1/search/items/details?Category=12&Subcategory=39&SortType=1&SortAggregation=&limit=30&IncludeNotForSale=true&cursor=".. Cursor)
+        end)
+        if not success or not Response then
+            attemptCount = attemptCount + 1
+            Loading.Text = "Loading... Attempt " .. attemptCount .. "/" .. maxAttempts
+            if attemptCount >= maxAttempts then
+                return nil
+            end
+            task.wait(5)
+            return Request()
+        end
+        local Body = HttpService:JSONDecode(Response)
+        if not Body or not Body.data then
+            attemptCount = attemptCount + 1
+            Loading.Text = "Loading... Attempt " .. attemptCount .. "/" .. maxAttempts
+            if attemptCount >= maxAttempts then
+                return nil
+            end
+            task.wait(5)
+            return Request()
+        end
+        return Body
+    end
+    local Response = Request()
+    if not Response then
+        SendNotification("Error", "Failed to load emotes after multiple attempts. Try again later.")
+        Loading:Destroy()
+        break
+    end
+    for i,v in pairs(Response.data) do
+        AddEmote(v.name, v.id, v.price)
+    end
+    if Response.nextPageCursor ~= nil then
+        Cursor = Response.nextPageCursor
+        task.wait(1) -- Задержка между запросами
+    else
+        success = true
+        break
+    end
+end
+
+-- Удаление Loading и уведомление
 Loading:Destroy()
 if #Emotes > 0 then
-	SendNotification("Done!", "Emotes GUI is loaded with " .. #Emotes .. " emotes!")
+    SendNotification("Done!", "Emotes GUI is loaded with " .. #Emotes .. " emotes!")
 else
-	SendNotification("Warning", "No emotes loaded. Check your connection or try again.")
+    SendNotification("Warning", "No emotes loaded. Check your connection or try again.")
 end
 
 --sorting options setup
@@ -611,4 +644,4 @@ if LocalPlayer.Character then
 end
 
 LocalPlayer.CharacterAdded:Connect(CharacterAdded)
-
+end
