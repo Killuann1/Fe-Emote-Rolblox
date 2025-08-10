@@ -1,5 +1,6 @@
 --keybind to open is comma
---made by Gi#7331
+--made by 69killua 
+--Idea taken from Gi#7331
 
 local IsStudio = false
 
@@ -608,4 +609,5 @@ end
 if LocalPlayer.Character then
 	CharacterAdded(LocalPlayer.Character)
 end
+
 LocalPlayer.CharacterAdded:Connect(CharacterAdded)
